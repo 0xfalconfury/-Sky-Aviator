@@ -46,6 +46,14 @@ A fast-paced 3D endless flyer built with **Three.js**. Pilot a low-poly seaplane
 - **Procedural audio** — all sounds generated with the WebAudio API, no external audio files
 
 ---
+## Images
+
+<img src="./images/1.png" style="heigh:300px">
+<img src="./images/2.png"style="heigh:300px">
+<img src="./images/3.png"style="heigh:300px">
+<img src="./images/4.png"style="heigh:300px">
+
+
 
 ## 🕹 Demo
 
