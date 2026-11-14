@@ -1,0 +1,1237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sky Aviator</title>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+
+<style>
+*{box-sizing:border-box}
+
+body{
+ margin:0;
+ overflow:hidden;
+ background:#55b9ed;
+ font-family:Arial,sans-serif;
+ color:white;
+ user-select:none;
+}
+
+#game{position:fixed;inset:0}
+canvas{display:block}
+
+#hud{
+ position:fixed;
+ top:18px;left:18px;right:18px;
+ display:flex;
+ justify-content:space-between;
+ gap:10px;
+ pointer-events:none;
+ z-index:5;
+ flex-wrap:wrap;
+}
+
+.panel{
+ background:#102b46cc;
+ backdrop-filter:blur(12px);
+ padding:12px 20px;
+ border:1px solid #ffffff40;
+ border-radius:13px;
+}
+
+.panel small{
+ display:block;
+ color:#b8d9ed;
+ font-size:11px;
+}
+
+.panel strong{font-size:23px}
+
+#fuelPanel{min-width:170px}
+#fuelBarOuter{
+ width:100%;
+ height:12px;
+ background:#0a1d30;
+ border-radius:6px;
+ overflow:hidden;
+ margin-top:6px;
+ border:1px solid #ffffff30;
+}
+#fuelBarInner{
+ height:100%;
+ width:100%;
+ background:linear-gradient(90deg,#4be38a,#8ff0b5);
+ transition:width .15s linear, background .3s;
+}
+#fuelBarInner.low{background:linear-gradient(90deg,#ff6b6b,#ffb36b)}
+#fuelBarInner.critical{background:linear-gradient(90deg,#ff2d2d,#ff8a3c);animation:pulse 0.6s infinite alternate}
+@keyframes pulse{from{opacity:1}to{opacity:.5}}
+
+#center{
+ position:fixed;
+ inset:0;
+ display:grid;
+ place-items:center;
+ background:#071d3260;
+ z-index:10;
+}
+
+.modal{
+ width:min(90%,390px);
+ text-align:center;
+ padding:35px 28px;
+ background:#102d49ee;
+ border-radius:22px;
+ border:1px solid #ffffff50;
+}
+
+h1{font-size:36px;color:#ffd65c}
+
+p{color:#d2e7f4;line-height:1.6}
+
+button{
+ border:0;
+ border-radius:12px;
+ background:linear-gradient(135deg,#ffe17b,#ffbd30);
+ color:#172a3a;
+ font-weight:bold;
+ font-size:16px;
+ padding:15px 28px;
+ cursor:pointer;
+}
+
+button.secondary{
+ background:#1d4a73;
+ color:#d2e7f4;
+ border:1px solid #ffffff40;
+ font-size:14px;
+ padding:12px 20px;
+}
+
+#help{
+ position:fixed;
+ bottom:18px;
+ left:0;right:0;
+ text-align:center;
+ font-size:13px;
+ pointer-events:none;
+ z-index:4;
+}
+
+#mobile{
+ position:fixed;
+ bottom:45px;
+ left:0;right:0;
+ display:none;
+ justify-content:space-between;
+ padding:0 24px;
+ z-index:6;
+}
+
+#mobile button{
+ width:65px;height:65px;
+ border-radius:50%;
+ background:#102b46bb;
+ color:white;
+ border:1px solid #ffffff66;
+ touch-action:none;
+ font-size:22px;
+}
+
+#pauseBtn{
+ position:fixed;
+ top:18px;
+ left:50%;
+ transform:translateX(-50%);
+ z-index:7;
+ width:46px;height:46px;
+ border-radius:50%;
+ background:#102b46cc;
+ color:white;
+ font-size:20px;
+ padding:0;
+ border:1px solid #ffffff40;
+ display:grid;
+ place-items:center;
+ backdrop-filter:blur(12px);
+}
+#pauseBtn.hidden{display:none}
+
+#soundBtn{
+ position:fixed;
+ top:18px;
+ right:18px;
+ z-index:7;
+ width:46px;height:46px;
+ border-radius:50%;
+ background:#102b46cc;
+ color:white;
+ font-size:20px;
+ padding:0;
+ border:1px solid #ffffff40;
+ display:grid;
+ place-items:center;
+ backdrop-filter:blur(12px);
+}
+
+#pauseScreen{
+ position:fixed;
+ inset:0;
+ display:none;
+ place-items:center;
+ background:#071d3299;
+ z-index:11;
+ backdrop-filter:blur(4px);
+}
+#pauseScreen.show{display:grid}
+
+#hitFlash{
+ position:fixed;
+ inset:0;
+ background:#ff2d2d;
+ opacity:0;
+ pointer-events:none;
+ z-index:8;
+ transition:opacity .15s;
+}
+
+@media(max-width:700px){
+ #mobile{display:flex}
+ #help{bottom:120px}
+ .panel{padding:9px 12px}
+ .panel strong{font-size:18px}
+ .panel small{font-size:9px}
+ h1{font-size:30px}
+ #hud{gap:6px;top:12px;left:12px;right:12px}
+ #pauseBtn{top:auto;bottom:45px;left:50%}
+ #soundBtn{top:12px;right:12px;width:38px;height:38px;font-size:16px}
+ .modal{padding:26px 20px}
+ button{padding:12px 22px;font-size:15px}
+}
+</style>
+</head>
+
+<body>
+
+<div id="game"></div>
+
+<div id="hitFlash"></div>
+
+<div id="hud">
+ <div class="panel">
+  <small>DISTANCE</small>
+  <strong id="score">0</strong>
+ </div>
+ <div class="panel">
+  <small>COINS</small>
+  <strong id="coins">0</strong>
+ </div>
+ <div class="panel" id="fuelPanel">
+  <small>FUEL</small>
+  <strong id="fuelText">100%</strong>
+  <div id="fuelBarOuter"><div id="fuelBarInner"></div></div>
+ </div>
+ <div class="panel">
+  <small>BEST</small>
+  <strong id="best">0</strong>
+ </div>
+</div>
+
+<button id="pauseBtn" class="hidden">❚❚</button>
+<button id="soundBtn">🔊</button>
+
+<div id="center">
+ <div class="modal">
+  <h1>✈ SKY AVIATOR</h1>
+  <p id="message">
+   Fly above the ocean, dodge the trees,<br>
+   collect gold coins, watch your fuel,<br>
+   and dodge the attacking birds!
+  </p>
+  <button id="start">START FLYING</button>
+ </div>
+</div>
+
+<div id="pauseScreen">
+ <div class="modal">
+  <h1>⏸ PAUSED</h1>
+  <p>Take a breath, pilot.</p>
+  <button id="resume">RESUME</button>
+  <button id="restart" class="secondary" style="margin-top:10px">RESTART</button>
+ </div>
+</div>
+
+<div id="mobile">
+ <button id="left">◀</button>
+ <button id="right">▶</button>
+ <button id="up">▲</button>
+ <button id="down">▼</button>
+</div>
+
+<div id="help">
+ Use ← → A D ↑ ↓ W S to steer • P to pause • Drag on mobile
+</div>
+</body>
+
+<script type="module">
+
+import * as THREE from 'three';
+import { Water } from 'three/addons/objects/Water.js';
+
+/* ============================================================
+   AUDIO
+   ============================================================ */
+let audioCtx = null;
+let soundOn = true;
+
+function ensureAudio(){
+ if(!audioCtx){
+  try{ audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
+  catch(e){ audioCtx = null; }
+ }
+ if(audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+ return audioCtx;
+}
+
+function beep(freq=440, dur=0.12, type='sine', vol=0.18){
+ if(!soundOn) return;
+ const ctx = ensureAudio();
+ if(!ctx) return;
+ const osc = ctx.createOscillator();
+ const gain = ctx.createGain();
+ osc.type = type;
+ osc.frequency.value = freq;
+ gain.gain.setValueAtTime(vol, ctx.currentTime);
+ gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + dur);
+ osc.connect(gain);
+ gain.connect(ctx.destination);
+ osc.start();
+ osc.stop(ctx.currentTime + dur);
+}
+
+function sfxCoin(){ beep(880,0.09,'triangle',0.18); setTimeout(()=>beep(1320,0.1,'triangle',0.15),55); }
+function sfxRefuel(){ beep(520,0.1,'sine',0.16); setTimeout(()=>beep(780,0.12,'sine',0.16),80); setTimeout(()=>beep(1040,0.14,'sine',0.14),160); }
+function sfxHit(){ beep(160,0.18,'sawtooth',0.22); setTimeout(()=>beep(90,0.22,'sawtooth',0.2),60); }
+function sfxBirds(){ beep(2400,0.04,'square',0.06); setTimeout(()=>beep(2200,0.04,'square',0.06),90); setTimeout(()=>beep(2500,0.05,'square',0.05),180); }
+function sfxWarning(){ beep(1800,0.05,'square',0.07); setTimeout(()=>beep(1800,0.05,'square',0.07),140); setTimeout(()=>beep(1800,0.05,'square',0.07),280); }
+function sfxCrash(){ beep(120,0.5,'sawtooth',0.25); setTimeout(()=>beep(60,0.7,'sawtooth',0.22),100); }
+function sfxPause(){ beep(660,0.09,'sine',0.14); setTimeout(()=>beep(440,0.11,'sine',0.12),80); }
+function sfxResume(){ beep(440,0.09,'sine',0.12); setTimeout(()=>beep(660,0.11,'sine',0.14),80); }
+function sfxStart(){ beep(660,0.1,'triangle',0.15); setTimeout(()=>beep(880,0.1,'triangle',0.15),90); setTimeout(()=>beep(1320,0.16,'triangle',0.15),180); }
+
+/* ============================================================
+   SCENE
+   ============================================================ */
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x55b9ed);
+scene.fog = new THREE.Fog(0x55b9ed, 100, 350);
+
+const camera = new THREE.PerspectiveCamera(65, innerWidth/innerHeight, 0.1, 1500);
+camera.position.set(0, 5, 12);
+camera.lookAt(0, 0, -12);
+
+const renderer = new THREE.WebGLRenderer({ antialias:true, powerPreference:"high-performance" });
+renderer.setSize(innerWidth, innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.15;
+document.getElementById('game').appendChild(renderer.domElement);
+
+const hemi = new THREE.HemisphereLight(0xffffff, 0x557a92, 2);
+scene.add(hemi);
+
+const sun = new THREE.DirectionalLight(0xffffff, 2.5);
+sun.position.set(-20, 30, 15);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.camera.left=-30; sun.shadow.camera.right=30;
+sun.shadow.camera.top=30;   sun.shadow.camera.bottom=-30;
+scene.add(sun);
+
+const yellow = new THREE.MeshStandardMaterial({ color:0xffcf43, roughness:.4, metalness:.15 });
+const dark   = new THREE.MeshStandardMaterial({ color:0x16456c });
+const white  = new THREE.MeshStandardMaterial({ color:0xf3f7fa });
+const red    = new THREE.MeshStandardMaterial({ color:0xe94c4c });
+const green  = new THREE.MeshStandardMaterial({ color:0x259b72 });
+const gold   = new THREE.MeshStandardMaterial({ color:0xffd02e, metalness:.65, roughness:.25 });
+const birdMat = new THREE.MeshStandardMaterial({ color:0x2b2b3a, roughness:.6 });
+const birdBeak = new THREE.MeshStandardMaterial({ color:0xffae42, roughness:.5 });
+
+/* Tree materials */
+const trunkMat  = new THREE.MeshStandardMaterial({ color:0x6b4423, roughness:.9 });
+const leafMat   = new THREE.MeshStandardMaterial({ color:0x2e8b45, roughness:.85 });
+const leafMat2  = new THREE.MeshStandardMaterial({ color:0x3aa65a, roughness:.85 });
+const leafMat3  = new THREE.MeshStandardMaterial({ color:0x1f6e36, roughness:.85 });
+
+/* ============================================================
+   PLANE
+   ============================================================ */
+const plane = new THREE.Group();
+scene.add(plane);
+
+function box(parent, w,h,d, mat, x,y,z){
+ const mesh = new THREE.Mesh(new THREE.BoxGeometry(w,h,d), mat);
+ mesh.position.set(x,y,z);
+ mesh.castShadow = true;
+ mesh.receiveShadow = true;
+ parent.add(mesh);
+ return mesh;
+}
+
+box(plane, .65,.55,2.5, yellow, 0,0,0);
+box(plane, 5,.13,1.05, white, 0,-.12,0);
+box(plane, 1.7,.12,.65, yellow, 0,.28,.8);
+box(plane, .16,1.1,.65, red, 0,.55,.8);
+
+const cockpit = new THREE.Mesh(
+ new THREE.SphereGeometry(.35,16,12),
+ new THREE.MeshStandardMaterial({ color:0x153c61, metalness:.4, roughness:.2 })
+);
+cockpit.scale.set(.8,.7,1.5);
+cockpit.position.set(0,.3,-.2);
+plane.add(cockpit);
+
+const prop = new THREE.Group();
+prop.position.set(0,0,1.3);
+plane.add(prop);
+box(prop, .12,1.15,.12, dark, 0,0,0);
+
+/* ============================================================
+   WATER
+   ============================================================ */
+const waterGeometry = new THREE.PlaneGeometry(2000, 2000);
+const waterNormals = new THREE.TextureLoader().load(
+ 'https://threejs.org/examples/textures/waternormals.jpg',
+ texture => {
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.wrapT = THREE.RepeatWrapping;
+ }
+);
+waterNormals.repeat.set(8,8);
+
+const water = new Water(waterGeometry, {
+ textureWidth:512, textureHeight:512,
+ waterNormals: waterNormals,
+ sunDirection: new THREE.Vector3(-1,1,1).normalize(),
+ sunColor:0xffffff,
+ waterColor:0x003f68,
+ distortionScale:5.5,
+ fog:true
+});
+water.rotation.x = -Math.PI/2;
+water.position.set(0,-4,-30);
+scene.add(water);
+
+/* ============================================================
+   CLOUDS
+   ============================================================ */
+const clouds = [];
+const cloudMaterial = new THREE.MeshStandardMaterial({ color:0xffffff });
+for(let i=0;i<28;i++){
+ const cloud = new THREE.Group();
+ for(let j=0;j<5;j++){
+  const puff = new THREE.Mesh(
+   new THREE.SphereGeometry(1.1 + Math.random()*.8, 12, 10),
+   cloudMaterial
+  );
+  puff.position.set(j*1.1, Math.random()*.5, Math.random()*.5);
+  cloud.add(puff);
+ }
+ cloud.position.set(
+  (Math.random()-.5)*65,
+  8 + Math.random()*18,
+  -Math.random()*120
+ );
+ scene.add(cloud);
+ clouds.push(cloud);
+}
+
+/* ============================================================
+   GAME STATE
+   ============================================================ */
+const obstacles = [];
+const coinsList = [];
+const refuels   = [];
+const birds     = [];
+
+let running   = false;
+let paused    = false;
+let score     = 0;
+let coins     = 0;
+let best      = Number(localStorage.getItem('skyBest') || 0);
+let speed     = 19;
+let spawnTimer = 0;
+let coinTimer  = 0;
+let refuelTimer= 0;
+let birdTimer  = 0;
+
+let x = 0, y = 0;
+
+let fuel = 100;
+const FUEL_MAX = 100;
+const FUEL_DRAIN_BASE = 1.6;
+const FUEL_DRAIN_SPEED = 0.06;
+const FUEL_HIT_LOSS = 20;
+const REFUEL_AMOUNT = 35;
+const REFUEL_INTERVAL = 9;
+
+let hurtFlashCooldown = 0;
+let hurtFlash = document.getElementById('hitFlash');
+
+const keys = { left:false, right:false, up:false, down:false };
+
+document.getElementById('best').textContent = best;
+
+/* ============================================================
+   BIRD MODEL
+   ============================================================ */
+function createBird(){
+ const g = new THREE.Group();
+
+ const body = new THREE.Mesh(new THREE.SphereGeometry(.45, 12, 10), birdMat);
+ body.scale.set(1.6, 0.9, 1.0);
+ body.castShadow = true;
+ g.add(body);
+
+ const head = new THREE.Mesh(new THREE.SphereGeometry(.28, 10, 8), birdMat);
+ head.position.set(0.75, 0.12, 0);
+ head.castShadow = true;
+ g.add(head);
+
+ const beak = new THREE.Mesh(new THREE.ConeGeometry(.09, 0.32, 6), birdBeak);
+ beak.rotation.z = -Math.PI/2;
+ beak.position.set(1.05, 0.08, 0);
+ g.add(beak);
+
+ const eyeW = new THREE.Mesh(new THREE.SphereGeometry(.07,8,6), white);
+ eyeW.position.set(0.86, 0.22, 0.16);
+ g.add(eyeW);
+ const eyeW2 = eyeW.clone(); eyeW2.position.z = -0.16; g.add(eyeW2);
+ const pupilMat = new THREE.MeshStandardMaterial({color:0x000000});
+ const pupil = new THREE.Mesh(new THREE.SphereGeometry(.035,6,6), pupilMat);
+ pupil.position.set(0.9, 0.22, 0.17);
+ g.add(pupil);
+ const pupil2 = pupil.clone(); pupil2.position.z = -0.17; g.add(pupil2);
+
+ const wingGeo = new THREE.BoxGeometry(0.15, 0.06, 1.1);
+
+ const leftPivot = new THREE.Group();
+ leftPivot.position.set(-0.05, 0.12, -0.1);
+ const leftWing = new THREE.Mesh(wingGeo, birdMat);
+ leftWing.position.set(0, 0, -0.55);
+ leftWing.castShadow = true;
+ leftPivot.add(leftWing);
+ g.add(leftPivot);
+
+ const rightPivot = new THREE.Group();
+ rightPivot.position.set(-0.05, 0.12, 0.1);
+ const rightWing = new THREE.Mesh(wingGeo, birdMat);
+ rightWing.position.set(0, 0, 0.55);
+ rightWing.castShadow = true;
+ rightPivot.add(rightWing);
+ g.add(rightPivot);
+
+ const tail = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.06, 0.4), birdMat);
+ tail.position.set(-0.85, 0.05, 0);
+ g.add(tail);
+
+ g.userData.leftPivot = leftPivot;
+ g.userData.rightPivot = rightPivot;
+ return g;
+}
+
+/* ============================================================
+   WHITE HORIZON DOTTED LINE
+   ============================================================ */
+function createDottedLine(){
+ const dotCount = 18;
+ const geo = new THREE.BufferGeometry();
+ const positions = new Float32Array(dotCount * 3);
+ geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+
+ const mat = new THREE.PointsMaterial({
+  color: 0xffffff,
+  size: 0.24,
+  sizeAttenuation: true,
+  transparent: true,
+  opacity: 0.95,
+  depthWrite: false,
+  blending: THREE.AdditiveBlending
+ });
+
+ const points = new THREE.Points(geo, mat);
+ points.frustumCulled = false;
+ points.visible = false;
+ return points;
+}
+
+/* ============================================================
+   TREE OBSTACLE
+   ============================================================ */
+function createTree(scale){
+ const tree = new THREE.Group();
+
+ // Trunk
+ const trunkHeight = 3.2 * scale;
+ const trunk = new THREE.Mesh(
+  new THREE.CylinderGeometry(0.22*scale, 0.30*scale, trunkHeight, 8),
+  trunkMat
+ );
+ trunk.position.y = trunkHeight/2;
+ trunk.castShadow = true;
+ trunk.receiveShadow = true;
+ tree.add(trunk);
+
+ // Root flare (a wider short cylinder at the base)
+ const root = new THREE.Mesh(
+  new THREE.CylinderGeometry(0.42*scale, 0.5*scale, 0.6*scale, 8),
+  trunkMat
+ );
+ root.position.y = 0.3*scale;
+ root.castShadow = true;
+ tree.add(root);
+
+ // Foliage — stacked spheres for a rounded canopy
+ const foliageY = trunkHeight + 0.5*scale;
+
+ const f1 = new THREE.Mesh(new THREE.SphereGeometry(1.15*scale, 12, 10), leafMat);
+ f1.position.set(0, foliageY, 0);
+ f1.castShadow = true;
+ tree.add(f1);
+
+ const f2 = new THREE.Mesh(new THREE.SphereGeometry(0.9*scale, 12, 10), leafMat2);
+ f2.position.set(-0.7*scale, foliageY - 0.2*scale, 0.2*scale);
+ f2.castShadow = true;
+ tree.add(f2);
+
+ const f3 = new THREE.Mesh(new THREE.SphereGeometry(0.9*scale, 12, 10), leafMat3);
+ f3.position.set(0.7*scale, foliageY - 0.25*scale, -0.2*scale);
+ f3.castShadow = true;
+ tree.add(f3);
+
+ const f4 = new THREE.Mesh(new THREE.SphereGeometry(0.85*scale, 12, 10), leafMat2);
+ f4.position.set(0.1*scale, foliageY + 0.7*scale, 0.1*scale);
+ f4.castShadow = true;
+ tree.add(f4);
+
+ // Store collision half-width for the trunk (used by collision code)
+ tree.userData.trunkRadius = 0.35 * scale;
+
+ return tree;
+}
+
+/* ============================================================
+   SPAWNERS
+   ============================================================ */
+function spawnObstacle(){
+ // gap where the plane can fly through, centered near 0
+ const gap = (Math.random()-.5) * 2.5;
+
+ const group = new THREE.Group();
+
+ // Two trees on either side of the gap
+ const gapWidth = 5.2;                 // flyable gap
+ const totalWidth = 12;                // total width across both trees
+ const sideSpan = (totalWidth - gapWidth) / 2;  // width on each side
+
+ const treeScale = 1.0 + Math.random()*0.35;
+
+ for(const side of [-1, 1]){
+  // center of this side's tree slot
+  const px = gap + side * (gapWidth/2 + sideSpan/2);
+
+  const tree = createTree(treeScale);
+  tree.position.set(px, 0, 0);
+  tree.userData.slotX = px;   // remember its center for collision
+  tree.userData.slotHalfWidth = sideSpan / 2;
+  group.add(tree);
+ }
+
+ // Trees start far ahead and lower them so they look like they grow out of water
+ group.position.set(0, -4, -55);
+
+ scene.add(group);
+ obstacles.push(group);
+}
+
+function spawnCoin(){
+ const coin = new THREE.Mesh(
+  new THREE.TorusGeometry(.48,.12,8,24),
+  gold
+ );
+ coin.position.set(
+  (Math.random()-.5)*8,
+  (Math.random()-.5)*4,
+  -48
+ );
+ coin.rotation.y = Math.PI/2;
+ scene.add(coin);
+ coinsList.push(coin);
+}
+
+function spawnRefuel(){
+ const can = new THREE.Group();
+
+ const body = new THREE.Mesh(
+  new THREE.CylinderGeometry(0.32, 0.32, 0.7, 14),
+  new THREE.MeshStandardMaterial({ color:0xff6b3d, metalness:.4, roughness:.35, emissive:0x662000, emissiveIntensity:.35 })
+ );
+ body.rotation.z = Math.PI/2;
+ body.castShadow = true;
+ can.add(body);
+
+ const cap = new THREE.Mesh(
+  new THREE.CylinderGeometry(0.12,0.12,0.16,10),
+  new THREE.MeshStandardMaterial({ color:0x203040, metalness:.6 })
+ );
+ cap.position.set(0, 0.32, 0);
+ can.add(cap);
+
+ const strap = new THREE.Mesh(
+  new THREE.BoxGeometry(0.62, 0.06, 0.44),
+  new THREE.MeshStandardMaterial({ color:0x203040 })
+ );
+ strap.position.y = 0.18;
+ can.add(strap);
+
+ const glow = new THREE.Mesh(
+  new THREE.SphereGeometry(0.75, 12, 10),
+  new THREE.MeshBasicMaterial({ color:0xff8a3c, transparent:true, opacity:0.15 })
+ );
+ can.add(glow);
+
+ can.position.set(
+  (Math.random()-.5)*8,
+  (Math.random()-.5)*4,
+  -48
+ );
+ scene.add(can);
+ refuels.push(can);
+}
+
+/* ============================================================
+   BIRD ATTACK CONFIG
+   ============================================================ */
+const BIRD_TELEGRAPH = 2.0;
+const BIRD_ATTACK_TIME = 1.2;
+
+function spawnBird(){
+ const side = Math.random() < 0.5 ? -1 : 1;
+
+ const b = createBird();
+
+ const startX = side * 20;
+ const startY = (Math.random() - .5) * 5;
+ const startZ = -40 - Math.random() * 10;
+
+ b.position.set(startX, startY, startZ);
+
+ const ud = b.userData;
+ ud.phase = 'telegraph';
+ ud.timer = 0;
+ ud.telegraphDur = BIRD_TELEGRAPH;
+ ud.attackDur = BIRD_ATTACK_TIME;
+ ud.attackStart = new THREE.Vector3();
+ ud.attackTarget = new THREE.Vector3();
+ ud.hit = false;
+ ud.line = createDottedLine();
+ scene.add(ud.line);
+ ud.line.visible = false;
+
+ ud.homeX = -side * 2.5 + (Math.random()-.5)*2;
+ ud.homeY = startY;
+ ud.homeZ = -26 - Math.random() * 4;
+
+ ud.flapSpeed = 12 + Math.random()*3;
+ ud.flapOffset = Math.random()*Math.PI*2;
+
+ scene.add(b);
+ birds.push(b);
+ sfxBirds();
+}
+
+/* ============================================================
+   CLEAR
+   ============================================================ */
+function clearAll(){
+ obstacles.forEach(o=>scene.remove(o));
+ coinsList.forEach(c=>scene.remove(c));
+ refuels.forEach(r=>scene.remove(r));
+ birds.forEach(b=>{
+  if(b.userData.line) scene.remove(b.userData.line);
+  scene.remove(b);
+ });
+ obstacles.length = 0;
+ coinsList.length = 0;
+ refuels.length = 0;
+ birds.length = 0;
+}
+
+/* ============================================================
+   HUD
+   ============================================================ */
+function updateFuelHUD(){
+ const pct = Math.max(0, Math.min(100, fuel));
+ document.getElementById('fuelText').textContent = Math.round(pct) + '%';
+ const bar = document.getElementById('fuelBarInner');
+ bar.style.width = pct + '%';
+ bar.classList.toggle('low', pct <= 35 && pct > 15);
+ bar.classList.toggle('critical', pct <= 15);
+}
+
+function flashHit(){
+ if(hurtFlashCooldown > 0) return;
+ hurtFlashCooldown = 0.35;
+ hurtFlash.style.opacity = 0.55;
+ setTimeout(()=>{ hurtFlash.style.opacity = 0; }, 120);
+}
+
+/* ============================================================
+   START / CRASH / PAUSE
+   ============================================================ */
+function start(){
+ ensureAudio();
+ clearAll();
+
+ score = 0;
+ coins = 0;
+ fuel  = FUEL_MAX;
+ x = 0; y = 0;
+ speed = 19;
+ spawnTimer = 0;
+ coinTimer  = 0;
+ refuelTimer= 0;
+ birdTimer  = 2.5;
+ running = true;
+ paused = false;
+ hurtFlashCooldown = 0;
+ hurtFlash.style.opacity = 0;
+
+ plane.position.set(0,0,0);
+ plane.rotation.set(0,0,0);
+
+ keys.left = keys.right = keys.up = keys.down = false;
+
+ document.getElementById('score').textContent = '0';
+ document.getElementById('coins').textContent = '0';
+ document.getElementById('center').style.display = 'none';
+ document.getElementById('pauseScreen').classList.remove('show');
+ document.getElementById('pauseBtn').classList.remove('hidden');
+ updateFuelHUD();
+
+ sfxStart();
+}
+
+function crash(reason){
+ if(!running) return;
+ running = false;
+ paused = false;
+
+ best = Math.max(best, Math.floor(score));
+ localStorage.setItem('skyBest', best);
+ document.getElementById('best').textContent = best;
+
+ const msg = reason === 'fuel'
+  ? `Out of fuel! Distance: ${Math.floor(score)} | Coins: ${coins}.`
+  : `Flight over! Distance: ${Math.floor(score)} | Coins: ${coins}.`;
+
+ document.getElementById('message').textContent = msg;
+ document.getElementById('start').textContent = 'FLY AGAIN';
+ document.getElementById('center').style.display = 'grid';
+ document.getElementById('pauseBtn').classList.add('hidden');
+ document.getElementById('pauseScreen').classList.remove('show');
+
+ if(reason === 'fuel') sfxHit(); else sfxCrash();
+}
+
+function pauseGame(){
+ if(!running || paused) return;
+ paused = true;
+ document.getElementById('pauseScreen').classList.add('show');
+ sfxPause();
+}
+
+function resumeGame(){
+ if(!running || !paused) return;
+ paused = false;
+ document.getElementById('pauseScreen').classList.remove('show');
+ sfxResume();
+}
+
+document.getElementById('start').addEventListener('click', start);
+document.getElementById('pauseBtn').addEventListener('click', pauseGame);
+document.getElementById('resume').addEventListener('click', resumeGame);
+document.getElementById('restart').addEventListener('click', start);
+
+document.getElementById('soundBtn').addEventListener('click', () => {
+ soundOn = !soundOn;
+ document.getElementById('soundBtn').textContent = soundOn ? '🔊' : '🔇';
+ if(soundOn) beep(880,0.08,'sine',0.12);
+});
+
+/* ============================================================
+   INPUT
+   ============================================================ */
+addEventListener('keydown', e => {
+ if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown',' '].includes(e.key)) e.preventDefault();
+
+ if(e.key === 'p' || e.key === 'P'){ paused ? resumeGame() : pauseGame(); return; }
+
+ if(!running) return;
+
+ if(e.key === 'ArrowLeft'  || e.key.toLowerCase() === 'a') keys.left = true;
+ if(e.key === 'ArrowRight' || e.key.toLowerCase() === 'd') keys.right = true;
+ if(e.key === 'ArrowUp'    || e.key.toLowerCase() === 'w') keys.up = true;
+ if(e.key === 'ArrowDown'  || e.key.toLowerCase() === 's') keys.down = true;
+});
+
+addEventListener('keyup', e => {
+ if(e.key === 'ArrowLeft'  || e.key.toLowerCase() === 'a') keys.left = false;
+ if(e.key === 'ArrowRight' || e.key.toLowerCase() === 'd') keys.right = false;
+ if(e.key === 'ArrowUp'    || e.key.toLowerCase() === 'w') keys.up = false;
+ if(e.key === 'ArrowDown'  || e.key.toLowerCase() === 's') keys.down = false;
+});
+
+function bindButton(id, key){
+ const button = document.getElementById(id);
+ button.addEventListener('pointerdown', e => { e.preventDefault(); keys[key] = true; });
+ ['pointerup','pointerleave','pointercancel'].forEach(ev => {
+  button.addEventListener(ev, () => { keys[key] = false; });
+ });
+}
+bindButton('left','left');
+bindButton('right','right');
+bindButton('up','up');
+bindButton('down','down');
+
+let dragging = false, lastX = 0, lastY = 0;
+renderer.domElement.addEventListener('pointerdown', e => {
+ dragging = true; lastX = e.clientX; lastY = e.clientY;
+});
+addEventListener('pointerup',     () => dragging = false);
+addEventListener('pointercancel', () => dragging = false);
+addEventListener('pointermove', e => {
+ if(!dragging || !running || paused) return;
+ x += (e.clientX - lastX)/innerWidth * 15;
+ y -= (e.clientY - lastY)/innerHeight * 9;
+ lastX = e.clientX;
+ lastY = e.clientY;
+});
+
+/* ============================================================
+   COLLISION
+   ============================================================ */
+function checkObstacleCollision(obstacle){
+ if(Math.abs(obstacle.position.z) > 2.0) return false;
+
+ for(const tree of obstacle.children){
+  const trunkX = obstacle.position.x + tree.position.x;
+  const radius = (tree.userData.trunkRadius || 0.35) + 0.55;
+
+  const hitX = Math.abs(plane.position.x - trunkX) < radius;
+
+  // Only the part of the tree above water blocks the plane.
+  // The tree grows from obstacle.position.y (which is -4), so the trunk
+  // top = obstacle.position.y + trunkHeight. Use a fixed vertical window
+  // that matches the plane's flying band.
+  const hitY = Math.abs(plane.position.y) < 4.2;
+
+  if(hitX && hitY) return true;
+ }
+ return false;
+}
+
+/* ============================================================
+   BIRD UPDATE
+   ============================================================ */
+const _tmpVec  = new THREE.Vector3();
+const _tmpVec2 = new THREE.Vector3();
+
+function updateBirdLine(bird){
+ const line = bird.userData.line;
+ if(!line.visible) return;
+ const posAttr = line.geometry.attributes.position;
+ const arr = posAttr.array;
+ const dotCount = arr.length / 3;
+
+ const start = bird.position;
+ const target = bird.userData.phase === 'attack'
+  ? bird.userData.attackTarget
+  : plane.position;
+
+ for(let i = 0; i < dotCount; i++){
+  const t = (i + 1) / (dotCount + 1);
+  const wob = Math.sin(i * 0.7 + performance.now() * 0.003) * 0.06;
+  arr[i*3+0] = start.x + (target.x - start.x) * t;
+  arr[i*3+1] = start.y + (target.y - start.y) * t + wob;
+  arr[i*3+2] = start.z + (target.z - start.z) * t;
+ }
+ posAttr.needsUpdate = true;
+}
+
+function updateBird(b, dt){
+ const ud = b.userData;
+
+ const flap = Math.sin(performance.now() * 0.001 * ud.flapSpeed + ud.flapOffset);
+ ud.leftPivot.rotation.x  =  flap * 0.9;
+ ud.rightPivot.rotation.x = -flap * 0.9;
+
+ ud.timer += dt;
+
+ /* PHASE 1: TELEGRAPH */
+ if(ud.phase === 'telegraph'){
+
+  const target = _tmpVec2.set(ud.homeX, ud.homeY, ud.homeZ);
+  _tmpVec.copy(target).sub(b.position);
+
+  const arrive = 14 * dt;
+  if(_tmpVec.length() > arrive){
+   b.position.addScaledVector(_tmpVec.normalize(), arrive);
+  } else {
+   b.position.copy(target);
+  }
+
+  b.position.y = ud.homeY + Math.sin(performance.now() * 0.004) * 0.15;
+
+  _tmpVec.copy(plane.position).sub(b.position);
+  if(_tmpVec.lengthSq() > 0.0001){
+   const look = b.position.clone().add(_tmpVec);
+   b.lookAt(look);
+   b.rotateY(-Math.PI / 2);
+  }
+
+  ud.line.visible = true;
+  updateBirdLine(b);
+
+  if(!ud.warned){
+   ud.warned = true;
+   sfxWarning();
+  }
+
+  if(ud.timer >= ud.telegraphDur){
+   ud.phase = 'attack';
+   ud.timer = 0;
+   ud.attackStart.copy(b.position);
+   ud.attackTarget.copy(plane.position);
+   ud.line.material.color.setHex(0xff2d2d);
+  }
+  return;
+ }
+
+ /* PHASE 2: ATTACK */
+ if(ud.phase === 'attack'){
+
+  const t = Math.min(1, ud.timer / ud.attackDur);
+  const et = t * t;
+
+  b.position.lerpVectors(ud.attackStart, ud.attackTarget, et);
+  updateBirdLine(b);
+
+  if(!ud.hit){
+   const dist = b.position.distanceTo(plane.position);
+   if(dist < 1.4){
+    ud.hit = true;
+    fuel = Math.max(0, fuel - FUEL_HIT_LOSS);
+    updateFuelHUD();
+    flashHit();
+    sfxHit();
+    if(fuel <= 0){ crash('fuel'); return; }
+   }
+  }
+
+  if(t >= 1){
+   ud.phase = 'done';
+   ud.line.visible = false;
+  }
+  return;
+ }
+
+ /* PHASE 3: DONE */
+ const away = _tmpVec.copy(b.position).sub(plane.position);
+ if(away.lengthSq() < 0.0001) away.set(0, 1, 1);
+ away.normalize();
+ b.position.addScaledVector(away, 14 * dt);
+ b.position.z -= 8 * dt;
+}
+
+/* ============================================================
+   MAIN LOOP
+   ============================================================ */
+let previous = 0;
+
+function animate(time){
+ requestAnimationFrame(animate);
+
+ const dt = Math.min((time - previous)/1000, 0.04) || 0;
+ previous = time;
+
+ prop.rotation.z += dt * 24;
+
+ if(water.material.uniforms.time){
+  water.material.uniforms.time.value += dt;
+ }
+
+ clouds.forEach(cloud => {
+  cloud.position.z += dt * 3;
+  if(cloud.position.z > 15){
+   cloud.position.z = -130;
+   cloud.position.x = (Math.random()-.5)*65;
+  }
+ });
+
+ if(hurtFlashCooldown > 0) hurtFlashCooldown -= dt;
+
+ if(running && !paused){
+
+  score += dt * speed;
+  speed = Math.min(32, 19 + score/150);
+
+  const drain = FUEL_DRAIN_BASE + speed * FUEL_DRAIN_SPEED;
+  fuel = Math.max(0, fuel - drain * dt);
+  updateFuelHUD();
+  if(fuel <= 0){
+   crash('fuel');
+   renderer.render(scene, camera);
+   return;
+  }
+
+  if(keys.left)  x -= dt * 8;
+  if(keys.right) x += dt * 8;
+  if(keys.up)    y += dt * 7;
+  if(keys.down)  y -= dt * 7;
+
+  x = THREE.MathUtils.clamp(x, -5.1, 5.1);
+  y = THREE.MathUtils.clamp(y, -2.6, 2.6);
+
+  const dx = x - plane.position.x;
+  const dy = y - plane.position.y;
+
+  plane.position.x = THREE.MathUtils.lerp(plane.position.x, x, .15);
+  plane.position.y = THREE.MathUtils.lerp(plane.position.y, y, .15);
+  plane.position.z = 0;
+
+  plane.rotation.z = THREE.MathUtils.lerp(plane.rotation.z, -dx * 1.5, .12);
+  plane.rotation.x = THREE.MathUtils.lerp(plane.rotation.x,  dy * 1.5, .12);
+
+  spawnTimer += dt;
+  coinTimer  += dt;
+  refuelTimer+= dt;
+  birdTimer  += dt;
+
+  if(spawnTimer > 2.2){ spawnObstacle(); spawnTimer = 0; }
+  if(coinTimer  > 1.3){ spawnCoin();     coinTimer  = 0; }
+  if(refuelTimer > REFUEL_INTERVAL){ spawnRefuel(); refuelTimer = 0; }
+
+  const birdSpawnDelay = Math.max(5.0, 8.0 - score/2500);
+  const activeBirds = birds.filter(b => b.userData.phase !== 'done').length;
+  if(birdTimer > birdSpawnDelay && activeBirds < 2){
+   spawnBird();
+   birdTimer = 0;
+  }
+
+  /* Obstacles (trees) */
+  for(let i=obstacles.length-1;i>=0;i--){
+   const obstacle = obstacles[i];
+   obstacle.position.z += speed * dt;
+   if(Math.abs(obstacle.position.z) < 1.4 && checkObstacleCollision(obstacle)){
+    crash('obstacle');
+   }
+   if(obstacle.position.z > 15){
+    scene.remove(obstacle);
+    obstacles.splice(i,1);
+   }
+  }
+
+  /* Coins */
+  for(let i=coinsList.length-1;i>=0;i--){
+   const coin = coinsList[i];
+   coin.position.z += speed * dt;
+   coin.rotation.y += dt * 4;
+
+   if(
+    Math.abs(coin.position.z) < 1.2 &&
+    Math.abs(coin.position.x - plane.position.x) < 1.1 &&
+    Math.abs(coin.position.y - plane.position.y) < 1.1
+   ){
+    coins++;
+    document.getElementById('coins').textContent = coins;
+    scene.remove(coin);
+    coinsList.splice(i,1);
+    sfxCoin();
+   } else if(coin.position.z > 12){
+    scene.remove(coin);
+    coinsList.splice(i,1);
+   }
+  }
+
+  /* Refuels */
+  for(let i=refuels.length-1;i>=0;i--){
+   const can = refuels[i];
+   can.position.z += speed * dt;
+   can.rotation.y += dt * 2.2;
+   can.rotation.x = Math.sin(performance.now()*0.003 + i)*0.15;
+
+   if(
+    Math.abs(can.position.z) < 1.2 &&
+    Math.abs(can.position.x - plane.position.x) < 1.2 &&
+    Math.abs(can.position.y - plane.position.y) < 1.2
+   ){
+    fuel = Math.min(FUEL_MAX, fuel + REFUEL_AMOUNT);
+    updateFuelHUD();
+    scene.remove(can);
+    refuels.splice(i,1);
+    sfxRefuel();
+   } else if(can.position.z > 12){
+    scene.remove(can);
+    refuels.splice(i,1);
+   }
+  }
+
+  /* Birds */
+  for(let i=birds.length-1;i>=0;i--){
+   const b = birds[i];
+   updateBird(b, dt);
+
+   if(b.position.z > 22 || b.position.length() > 200){
+    scene.remove(b.userData.line);
+    scene.remove(b);
+    birds.splice(i,1);
+   }
+  }
+
+  document.getElementById('score').textContent = Math.floor(score);
+ }
+
+ camera.position.x = THREE.MathUtils.lerp(camera.position.x, plane.position.x * .22, .04);
+ camera.lookAt(plane.position.x * .18, 0, -12);
+
+ renderer.render(scene, camera);
+}
+
+requestAnimationFrame(animate);
+
+addEventListener('resize', () => {
+ camera.aspect = innerWidth / innerHeight;
+ camera.updateProjectionMatrix();
+ renderer.setSize(innerWidth, innerHeight);
+ renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+});
+
+updateFuelHUD();
+document.getElementById('pauseBtn').classList.add('hidden');
+
+</script>
+</body>
+</html>
